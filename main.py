@@ -25,7 +25,9 @@ class Project:
             return Project(decoded['name'], decoded['max_requests_per_second'], decoded['max_requests_per_month'])
 
     def format(self, formatter):
-        return formatter.map({'name': self.name, 'max_requests_per_month': self.max_requests_per_month, 'max_requests_per_second': self.max_requests_per_second})
+        return formatter.map({'name': self.name,
+                              'max_requests_per_month': self.max_requests_per_month,
+                              'max_requests_per_second': self.max_requests_per_second})
 
 
 class ProjectRegisterSystem:
@@ -47,21 +49,28 @@ class ProjectRegisterSystem:
 
 class SimpleView(HTTPMethodView):
 
-    def __init__(self, admin_url, node_url, hit_register):
+    def __init__(self, admin_url, node_url, hit_register, cache):
+        self.cache = cache
         self.hit_register = hit_register
         self.node_url = node_url
         self.admin_url = admin_url
 
     async def post(self, request, project_id):
 
-
-        async with request.app.session.post(self.admin_url, json=request.json) as admin_response:
-
-            async with request.app.session.post(self.node_url, json=request.json) as response:
-                print("Status:", response.status)
-                print("Content-type:", response.headers['content-type'])
-                returnable = await response.json()
-                return json(returnable)
+        async with request.app.session.get(f"{self.admin_url}/api/v1/projects/{project_id}") as admin_response:
+            res = await admin_response.json()
+            if admin_response.status == 200:
+                self.cache.add(project_id)
+                self.hit_register.setdefault(project_id, 0)
+                print(self.cache)
+                print(self.hit_register)
+                if res['max_requests_per_month'] > self.hit_register[project_id]:
+                    self.hit_register[project_id] += 1
+                    async with request.app.session.post(self.node_url, json=request.json) as response:
+                        print("Status:", response.status)
+                        print("Content-type:", response.headers['content-type'])
+                        returnable = await response.json()
+                        return json(returnable)
 
 
 if __name__ == "__main__":
@@ -82,7 +91,7 @@ if __name__ == "__main__":
         session = aiohttp.ClientSession(loop=loop)
         sanicapp.session = session
 
-    view = SimpleView.as_view(node_url=NODE_URL, admin_url=ADMIN_URL)
+    view = SimpleView.as_view(node_url=NODE_URL, admin_url=ADMIN_URL, hit_register=dict(), cache=set())
 
     blueprint.add_route(view, '/<project_id:uuid>')
     app.blueprint(blueprint)
