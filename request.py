@@ -12,14 +12,7 @@ data = {
   "max_requests_per_month": 1000
 }
 
-res = requests.post(ADMIN_URL, data)
+PROJECT_ID = "5daddcc7-4f53-4f1e-bcc9-3ac8cfdd6056"
 
-content = res.content
-decoded = json.loads(content)
-
-
-print(res)
-print(decoded)
-
-w3 = Web3(Web3.HTTPProvider(URL + decoded['project_id']))
+w3 = Web3(Web3.HTTPProvider(URL + PROJECT_ID))
 print(w3.eth.block_number())

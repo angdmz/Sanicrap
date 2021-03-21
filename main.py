@@ -1,6 +1,8 @@
+from http.client import TOO_MANY_REQUESTS, FORBIDDEN
+
 import aiohttp
 from sanic import Sanic, Blueprint
-from sanic.response import json
+from sanic.response import json, empty
 import argparse
 import os
 import requests
@@ -62,15 +64,15 @@ class SimpleView(HTTPMethodView):
             if admin_response.status == 200:
                 self.cache.add(project_id)
                 self.hit_register.setdefault(project_id, 0)
-                print(self.cache)
-                print(self.hit_register)
                 if res['max_requests_per_month'] > self.hit_register[project_id]:
                     self.hit_register[project_id] += 1
                     async with request.app.session.post(self.node_url, json=request.json) as response:
-                        print("Status:", response.status)
-                        print("Content-type:", response.headers['content-type'])
                         returnable = await response.json()
                         return json(returnable)
+                else:
+                    return empty(status=TOO_MANY_REQUESTS)
+            else:
+                return empty(status=FORBIDDEN)
 
 
 if __name__ == "__main__":
